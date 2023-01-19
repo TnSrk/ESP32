@@ -1,0 +1,136 @@
+//gps test
+#include <TinyGPSPlus.h>
+#include <Adafruit_SSD1306.h>
+#include <Preferences.h>
+#define OLED_RESET -1
+#define RXD2 16
+#define TXD2 17
+TinyGPSPlus gps;
+Preferences preferences;
+Adafruit_SSD1306 display(OLED_RESET);
+int i=1;
+
+// Initialize variables for storing start and end coordinates
+double startLat, startLong, endLat, endLong;
+double distance;
+
+void setup()
+{
+   // Open serial communications
+   Serial.begin(115200);
+   Serial.println("Neo6M GPS module test code");
+   // set the data rate for the SoftwareSerial port
+   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
+   display.begin(SSD1306_SWITCHCAPVCC, 0x3c); //สั่งให้จอ OLED เริ่มทำงานที่ Address 0x3C
+   display.clearDisplay();
+   preferences.begin("my-app", false);
+   double value = preferences.getUInt("dist", 0.0);
+   preferences.end();
+
+   startLat = gps.location.lat();
+   startLong = gps.location.lng();
+   distance = value;
+   delay(5000);
+
+}
+
+void lcd() {
+gps.encode(Serial2.read());
+display.clearDisplay(); // ลบภาพในหน้าจอทั้งหมด
+display.setTextSize(2); // กำหนดขนาดตัวอักษร
+display.setTextColor(WHITE);
+//display.setCursor(0,0); // กำหนดตำแหน่ง x,y ที่จะแสดงผล
+//display.clearDisplay();
+display.setCursor(0,0);
+display.print(gps.speed.kmph(), 3);
+display.println(" kph");
+display.setTextSize(1);
+display.setCursor(0,20);
+display.print(distance);
+//display.print(":");
+//display.print(gps.time.minute());
+//display.print(":");
+//display.print(gps.time.second());
+display.print(" ");
+display.print(gps.satellites.value(), 4);
+//display.print(",");
+//display.println(gps.location.lng(), 4);
+
+display.display();
+}
+
+void loop()
+{
+  while(Serial2.available() > 0)
+   if (gps.encode(Serial2.read()))
+   {
+   if (gps.location.isValid()) {
+        // Set the end coordinates
+        endLat = gps.location.lat();
+        endLong = gps.location.lng();
+        //Serial.print("startLat: ");
+        //Serial.println(startLat);
+        //Serial.print("startLong: ");
+        //Serial.println(startLong);
+        Serial.print("endLat: ");
+        Serial.println(endLat);
+        Serial.print("endLong: ");
+        Serial.println(endLong);
+        
+
+        // Calculate the distance between the start and end coordinates
+        double distance0 = distanceEarth(startLat, startLong, endLat, endLong);
+        Serial.print("distance0 B4if ");
+        Serial.println(distance0);
+        //if (i < 2 || gps.speed.kmph() < 5.0) {
+        //if (i < 10 || gps.speed.kmph() < 0.05 || gps.satellites.value() < 4) {
+          if (distance0 > 500.00 || distance0 < 1.00) {
+        distance0 = 0.00;
+        }
+        distance += distance0/1000.00 ;
+
+        // Print the distance
+        //Serial.print("distance: ");
+        //Serial.println(distance);
+        //Serial.print("distance0: ");
+        //Serial.print(distance0);
+        //Serial.println(" m");
+        startLat = endLat;
+        startLong = endLong;
+        
+      }
+      lcd();
+      //Serial.print(char(Serial2.read()));
+      i+=1;
+      //Serial.print("i=: ");
+      //Serial.println(i);
+      
+      if (i == 600){
+      //Serial.print("distance=");
+      Serial.println(distance);
+      //distance = 12; //RESET saved distance 
+      preferences.begin("my-app", false);
+      preferences.putUInt("dist", distance);
+      preferences.end();
+      i = 0;
+      }
+      delay(100);
+   }
+}
+
+// Function for calculating distance between two coordinates
+double distanceEarth(double lat1, double lon1, double lat2, double lon2) {
+  //double R = 6371; // Earth's radius in km
+  double R = 6371000; // Earth's radius in m
+  double dLat = deg2rad(lat2-lat1);
+  double dLon = deg2rad(lon2-lon1);
+  double a = sin(dLat/2) * sin(dLat/2) + cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * sin(dLon/2) * sin(dLon/2);
+  double c = 2 * atan2(sqrt(a), sqrt(1-a));
+  double d = R * c;
+  return d;
+}
+
+// Function for converting degrees to radians
+double deg2rad(double deg) {
+  return deg * (M_PI/180);
+}
